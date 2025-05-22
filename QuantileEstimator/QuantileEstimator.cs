@@ -73,12 +73,41 @@
 
     private void UpdateMarkers(double s)
     {
-        // work out where the new point fits and adjust marker positions
-        if (s < Q0) Q0 = s;
-        else if (s < Q1) pos1++;
-        else if (s < Q2) pos2++;
-        else if (s < Q3) pos3++;
-        else pos4++;
+        // Update marker positions according to the original P² algorithm
+        if (s < Q0)
+        {
+            Q0 = s;
+            pos1++;
+            pos2++;
+            pos3++;
+            pos4++;
+        }
+        else if (s < Q1)
+        {
+            pos1++;
+            pos2++;
+            pos3++;
+            pos4++;
+        }
+        else if (s < Q2)
+        {
+            pos2++;
+            pos3++;
+            pos4++;
+        }
+        else if (s < Q3)
+        {
+            pos3++;
+            pos4++;
+        }
+        else if (s < Q4)
+        {
+            pos4++;
+        }
+        else // s >= Q4
+        {
+            Q4 = s;
+        }
 
         desPos0 += inc0;
         desPos1 += inc1;
@@ -128,7 +157,6 @@
             }
         }
 
-
         // update the original positions and markers
         Q0 = markers[0];
         Q1 = markers[1];
@@ -162,11 +190,32 @@
 
     public double GetQuantile()
     {
-        //Console.Write($"\ndespos0: {desPos0},despos1: {desPos1}, despos2: {desPos2}, despos3: {desPos3}, despos4: {desPos4} ");
-        //Console.Write($"\npos0: {pos0},pos1: {pos1}, pos2: {pos2}, pos3: {pos3}, pos4: {pos4} ");
-        //Console.Write($"\nQ0: {Q0},Q1: {Q1}, Q2: {Q2}, Q3: {Q3}, Q4: {Q4} ");
-
-        // NB - desPos2 adapts best to different quantile positions. it captures central tendency of the distribution the best.
-        return desPos2;
+        // interpolate between markers
+        if (p <= 0.0) return Q0;
+        if (p >= 1.0) return Q4;
+        if (p <= 0.25)
+        {
+            // between Q0 and Q1
+            double t = p / 0.25;
+            return Q0 + t * (Q1 - Q0);
+        }
+        else if (p <= 0.5)
+        {
+            // between Q1 and Q2
+            double t = (p - 0.25) / 0.25;
+            return Q1 + t * (Q2 - Q1);
+        }
+        else if (p <= 0.75)
+        {
+            // between Q2 and Q3
+            double t = (p - 0.5) / 0.25;
+            return Q2 + t * (Q3 - Q2);
+        }
+        else
+        {
+            // between Q3 and Q4
+            double t = (p - 0.75) / 0.25;
+            return Q3 + t * (Q4 - Q3);
+        }
     }
 }
