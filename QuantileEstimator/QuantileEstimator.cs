@@ -114,7 +114,21 @@
         desPos2 += inc2;
         desPos3 += inc3;
         desPos4 += inc4;
+
+        // Ensure marker positions remain in order
+        ValidateMarkerPositions();
+
         AdjustMarkers();
+    }
+
+    private void ValidateMarkerPositions()
+    {
+        // makes sure marker positions are in ascending order,
+        // if they overlap it could mess up the how it represents the sample
+        pos1 = Math.Max(pos1, pos0 + 1);
+        pos2 = Math.Max(pos2, pos1 + 1);
+        pos3 = Math.Max(pos3, pos2 + 1);
+        pos4 = Math.Max(pos4, pos3 + 1);
     }
 
     private void AdjustMarkers()
@@ -188,6 +202,9 @@
         }
     }
 
+    /// <summary>
+    /// Gets the quantile estimate based on the adjusted markers.
+    /// </summary>
     public double GetQuantile()
     {
         // interpolate between markers
