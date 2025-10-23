@@ -41,14 +41,18 @@ internal class Program
             {
                 Console.WriteLine($"\nIteration {i}:");
                 Console.WriteLine($"  Current average: {cumulative_sum / i}");
-                Console.WriteLine($"  Final estimate for p={p}: {estimate}");
-
+                Console.WriteLine($"  Current estimate: {estimate}");
+            }
+            if (i == iterations)
+            {
+                Console.WriteLine($"\nFinal estimate for p={p} after {iterations} iterations: {estimate}");
             }
         }
 
         double exactQuantile = GetExactQuantile(aggregatedSequence, p);
-        Console.WriteLine($"\nExact quantile for p={p}: {exactQuantile}");
+        Console.WriteLine($"Exact quantile for p={p}: {exactQuantile}");
         Console.WriteLine($"Average quantile estimate: {cumulative_sum / iterations}");
+
         Console.WriteLine($"Difference: {Math.Abs(exactQuantile - (cumulative_sum / iterations))}");
         Console.WriteLine();
     }
