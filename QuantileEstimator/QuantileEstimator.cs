@@ -1,25 +1,26 @@
-﻿public class QuantileEstimator
+﻿using System;
+
+public class QuantileEstimator
 {
-    /// <summary>Quantile to estimate (between 0 and 1).</summary>
     private readonly double p;
-    /// <summary>Number of data points added.</summary>
     private int N = 0;
-    /// <summary>Markers for the five quantiles (Q0 to Q4).</summary>
     private double Q0, Q1, Q2, Q3, Q4;
-    /// <summary>Positions of the five markers (initially 1 through 5).</summary>
     private double pos0 = 1, pos1 = 2, pos2 = 3, pos3 = 4, pos4 = 5;
-    /// <summary>Desired positions of the markers based on quantile estimates.</summary>
     private double desPos0, desPos1, desPos2, desPos3, desPos4;
-    /// <summary>Increments for adjusting marker positions.</summary>
     private double inc0, inc1, inc2, inc3, inc4;
+
+    private bool debugMode = false;
+    private int debugInterval = 1000;
+
     /// <summary>Final quantile estimate.</summary>
     public double Quantile => GetQuantile();
 
-    /// <summary> Quantile estimator class that estimates the pth quantile of a distribution.</summary>
-    public QuantileEstimator(double p)
+    /// <summary>Quantile estimator class that estimates the pth quantile of a distribution.</summary>
+    public QuantileEstimator(double p, bool enableDebug = false)
     {
         if (p < 0 || p > 1) throw new ArgumentException("p must be between 0 and 1.");
         this.p = p;
+        this.debugMode = enableDebug;
         SetIncrements(p);
     }
 
@@ -35,6 +36,14 @@
         inc2 = p;
         inc3 = (1 + p) / 2;
         inc4 = 1;
+
+        if (debugMode)
+        {
+            Console.WriteLine($"Initial setup:");
+            Console.WriteLine($"  Markers: Q0-Q4 = [uninitialized]");
+            Console.WriteLine($"  Positions: pos0-pos4 = [{pos0}, {pos1}, {pos2}, {pos3}, {pos4}]");
+            Console.WriteLine($"  Increments: inc0-inc4 = [{inc0}, {inc1}, {inc2}, {inc3}, {inc4}]");
+        }
     }
 
     /// <summary>
@@ -51,12 +60,25 @@
                 case 2: Q1 = s; break;
                 case 3: Q2 = s; break;
                 case 4: Q3 = s; break;
-                case 5: Q4 = s; SortMarkers(); break;
+                case 5: 
+                    Q4 = s; 
+                    SortMarkers();
+                    if (debugMode)
+                    {
+                        Console.WriteLine($"Initial 5 markers sorted:");
+                        Console.WriteLine($"  Q0-Q4 = [{Q0}, {Q1}, {Q2}, {Q3}, {Q4}]");
+                    }
+                    break;
             }
+            return;
         }
-        else
+        UpdateMarkers(s);
+        if (debugMode && (N % debugInterval == 0))
         {
-            UpdateMarkers(s);
+            Console.WriteLine($"After {N} samples:");
+            Console.WriteLine($"  Markers: Q0-Q4 = [{Q0}, {Q1}, {Q2}, {Q3}, {Q4}]");
+            Console.WriteLine($"  Positions: pos0-pos4 = [{pos0}, {pos1}, {pos2}, {pos3}, {pos4}]");
+            Console.WriteLine($"  Current quantile estimate for p={p}: {GetQuantile()}");
         }
     }
 
@@ -73,7 +95,9 @@
 
     private void UpdateMarkers(double s)
     {
-        // Update marker positions according to the original P² algorithm
+        bool markerValueChanged = false;
+        double prevQ0 = Q0, prevQ1 = Q1, prevQ2 = Q2, prevQ3 = Q3, prevQ4 = Q4;
+
         if (s < Q0)
         {
             Q0 = s;
@@ -81,6 +105,7 @@
             pos2++;
             pos3++;
             pos4++;
+            markerValueChanged = true;
         }
         else if (s < Q1)
         {
@@ -104,9 +129,10 @@
         {
             pos4++;
         }
-        else // s >= Q4
+        else
         {
             Q4 = s;
+            markerValueChanged = true;
         }
 
         desPos0 += inc0;
@@ -115,63 +141,79 @@
         desPos3 += inc3;
         desPos4 += inc4;
 
-        // Ensure marker positions remain in order
+        // adjust the marker positions based on difference between desired and actual position
+        if (Math.Abs(desPos1 - pos1) >= 1) pos1 += Math.Sign(desPos1 - pos1);
+        if (Math.Abs(desPos2 - pos2) >= 1) pos2 += Math.Sign(desPos2 - pos2);
+        if (Math.Abs(desPos3 - pos3) >= 1) pos3 += Math.Sign(desPos3 - pos3);
+        if (Math.Abs(desPos4 - pos4) >= 1) pos4 += Math.Sign(desPos4 - pos4);
+
         ValidateMarkerPositions();
 
+        if (debugMode && markerValueChanged && (N % (debugInterval / 10) == 0))
+        {
+            Console.WriteLine($"Sample {N}: Direct marker update for new value {s}");
+            if (s < prevQ0)
+                Console.WriteLine($"  Q0 updated: {prevQ0} -> {Q0}");
+            else if (s > prevQ4)
+                Console.WriteLine($"  Q4 updated: {prevQ4} -> {Q4}");
+        }
         AdjustMarkers();
     }
 
     private void ValidateMarkerPositions()
     {
-        // makes sure marker positions are in ascending order,
-        // if they overlap it could mess up the how it represents the sample
+        double oldPos1 = pos1, oldPos2 = pos2, oldPos3 = pos3, oldPos4 = pos4;
         pos1 = Math.Max(pos1, pos0 + 1);
         pos2 = Math.Max(pos2, pos1 + 1);
         pos3 = Math.Max(pos3, pos2 + 1);
         pos4 = Math.Max(pos4, pos3 + 1);
+        if (debugMode && (oldPos1 != pos1 || oldPos2 != pos2 || oldPos3 != pos3 || oldPos4 != pos4) && (N % debugInterval == 0))
+        {
+            Console.WriteLine($"Sample {N}: Marker positions validated");
+            if (oldPos1 != pos1) Console.WriteLine($"  pos1 adjusted: {oldPos1} -> {pos1}");
+            if (oldPos2 != pos2) Console.WriteLine($"  pos2 adjusted: {oldPos2} -> {pos2}");
+            if (oldPos3 != pos3) Console.WriteLine($"  pos3 adjusted: {oldPos3} -> {pos3}");
+            if (oldPos4 != pos4) Console.WriteLine($"  pos4 adjusted: {oldPos4} -> {pos4}");
+        }
     }
 
     private void AdjustMarkers()
     {
-        // current positions of the markers
         double[] positions = { pos0, pos1, pos2, pos3, pos4 };
         double[] markers = { Q0, Q1, Q2, Q3, Q4 };
-
+        double[] originalMarkers = { Q0, Q1, Q2, Q3, Q4 };
         for (int i = 1; i < 4; i++)
         {
-            double delta = 0; // the difference between currentPos of a marker and it's desiredPos    
+            double delta = 0;
             switch (i)
             {
                 case 1: delta = desPos1 - pos1; break;
                 case 2: delta = desPos2 - pos2; break;
                 case 3: delta = desPos3 - pos3; break;
             }
-
-            // check if the difference is large enough to warrant adjustment based on surrounding positions
             if ((delta >= 1 && positions[i + 1] > positions[i] + 1) ||
                 (delta <= -1 && positions[i - 1] < positions[i] - 1))
             {
-                delta = Math.Sign(delta); // set the direction of the delta
-
-                // get the parabolic value to adjust the marker
-                double parabolicValue = CalculateMarker(i, markers, positions, delta, markers[i]);
-
-                // if the parabolic value is within bounds of the neighbouring markers, apply it
+                delta = Math.Sign(delta);
+                double parabolicValue = CalculateParabolicValue(i, markers, positions, delta);
+                double newValue;
                 if (markers[i - 1] < parabolicValue && parabolicValue < markers[i + 1])
                 {
-                    markers[i] = parabolicValue;
+                    newValue = parabolicValue;
                 }
                 else
                 {
-                    // apply linear interpolation if parabolic value is out of bounds
-                    double linearValue = markers[i] + delta * (markers[i + (int)delta] - markers[i]) / (positions[i + (int)delta] - positions[i]);
-                    markers[i] = linearValue;
+                    newValue = markers[i] + delta * (markers[i + (int)delta] - markers[i]) / (positions[i + (int)delta] - positions[i]);
                 }
                 positions[i] += delta;
+                markers[i] = newValue;
+                if (debugMode && Math.Abs(markers[i] - originalMarkers[i]) > 0.1 && (N % debugInterval == 0))
+                {
+                    Console.WriteLine($"Sample {N}: Marker Q{i} adjusted");
+                    Console.WriteLine($"  Q{i}: {originalMarkers[i]} -> {markers[i]}");
+                }
             }
         }
-
-        // update the original positions and markers
         Q0 = markers[0];
         Q1 = markers[1];
         Q2 = markers[2];
@@ -184,22 +226,12 @@
         pos4 = positions[4];
     }
 
-    private double CalculateMarker(int i, double[] markers, double[] positions, double delta, double parabolic)
+    private double CalculateParabolicValue(int i, double[] markers, double[] positions, double delta)
     {
-        if (markers[i - 1] < parabolic && parabolic < markers[i + 1])
-        {
-            // try parabolic
-            double parabolicInterpolation = markers[i] + delta / (positions[i + 1] - positions[i - 1]) *
-                                    ((markers[i + 1] - markers[i]) * (positions[i] - positions[i - 1] + delta) +
-                                    (markers[i] - markers[i - 1]) * (positions[i + 1] - positions[i] - delta));
-            return parabolicInterpolation;
-        }
-        else
-        {
-            // try linear
-            double linearInterpolation = markers[i] + delta * (markers[i + (int)delta] - markers[i]) / (positions[i + (int)delta] - positions[i]);
-            return linearInterpolation;
-        }
+        double parabolicInterpolation = markers[i] + delta / (positions[i + 1] - positions[i - 1]) *
+                              ((markers[i + 1] - markers[i]) * (positions[i] - positions[i - 1] + delta) +
+                              (markers[i] - markers[i - 1]) * (positions[i + 1] - positions[i] - delta));
+        return parabolicInterpolation;
     }
 
     /// <summary>
@@ -207,32 +239,32 @@
     /// </summary>
     public double GetQuantile()
     {
-        // interpolate between markers
         if (p <= 0.0) return Q0;
         if (p >= 1.0) return Q4;
         if (p <= 0.25)
         {
-            // between Q0 and Q1
-            double t = p / 0.25;
+            double t = 4 * p;
             return Q0 + t * (Q1 - Q0);
         }
         else if (p <= 0.5)
         {
-            // between Q1 and Q2
-            double t = (p - 0.25) / 0.25;
+            double t = 4 * (p - 0.25);
             return Q1 + t * (Q2 - Q1);
         }
         else if (p <= 0.75)
         {
-            // between Q2 and Q3
-            double t = (p - 0.5) / 0.25;
+            double t = 4 * (p - 0.5);
             return Q2 + t * (Q3 - Q2);
         }
         else
         {
-            // between Q3 and Q4
-            double t = (p - 0.75) / 0.25;
+            double t = 4 * (p - 0.75);
             return Q3 + t * (Q4 - Q3);
         }
+    }
+
+    public (double Min, double Q1, double Median, double Q3, double Max) GetCurrentMarkers()
+    {
+        return (Q0, Q1, Q2, Q3, Q4);
     }
 }
