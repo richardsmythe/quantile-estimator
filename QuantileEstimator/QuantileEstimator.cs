@@ -142,10 +142,10 @@ public class QuantileEstimator
         desPos4 += inc4;
 
         // adjust the marker positions based on difference between desired and actual position
-        if (Math.Abs(desPos1 - pos1) >= 1) pos1 += Math.Sign(desPos1 - pos1);
-        if (Math.Abs(desPos2 - pos2) >= 1) pos2 += Math.Sign(desPos2 - pos2);
-        if (Math.Abs(desPos3 - pos3) >= 1) pos3 += Math.Sign(desPos3 - pos3);
-        if (Math.Abs(desPos4 - pos4) >= 1) pos4 += Math.Sign(desPos4 - pos4);
+        if (Math.Abs(desPos1 - pos1) > 1) pos1 += Math.Sign(desPos1 - pos1);
+        if (Math.Abs(desPos2 - pos2) > 1) pos2 += Math.Sign(desPos2 - pos2);
+        if (Math.Abs(desPos3 - pos3) > 1) pos3 += Math.Sign(desPos3 - pos3);
+        if (Math.Abs(desPos4 - pos4) > 1) pos4 += Math.Sign(desPos4 - pos4);
 
         ValidateMarkerPositions();
 
@@ -226,12 +226,25 @@ public class QuantileEstimator
         pos4 = positions[4];
     }
 
-    private double CalculateParabolicValue(int i, double[] markers, double[] positions, double delta)
+    private double CalculateParabolicValue(int i, double[] markers, double[] positions, double positionShift)
     {
-        double parabolicInterpolation = markers[i] + delta / (positions[i + 1] - positions[i - 1]) *
-                              ((markers[i + 1] - markers[i]) * (positions[i] - positions[i - 1] + delta) +
-                              (markers[i] - markers[i - 1]) * (positions[i + 1] - positions[i] - delta));
-        return parabolicInterpolation;
+        double markerPrev = markers[i - 1];
+        double markerCurrent = markers[i];
+        double markerNext = markers[i + 1];
+        double posPrev = positions[i - 1];
+        double posCurrent = positions[i];
+        double posNext = positions[i + 1];
+
+        // first term interpolation based on slope (next to current) and horizontal distance
+        double forwardSlopeComponent = (markerNext - markerCurrent) / (posNext - posCurrent) * (posCurrent - posPrev + positionShift);
+
+        // second tern interpolation based on slope (current to previous) and horizontal distance
+        double backwardSlopeComponent = (markerCurrent - markerPrev) / (posCurrent - posPrev) * (posNext - posCurrent - positionShift);
+
+        // final calculation for change in marker height divided by the total span (posNext - posPrev)
+        double parabolicEstimate = markerCurrent + positionShift / (posNext - posPrev) * (forwardSlopeComponent + backwardSlopeComponent);
+
+        return parabolicEstimate;
     }
 
     /// <summary>
